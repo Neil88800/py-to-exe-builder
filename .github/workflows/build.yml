@@ -28,7 +28,7 @@ jobs:
         pyinstaller --noconfirm --windowed --onedir excel_name_tool.py --hidden-import=openpyxl
 
     - name: Upload build artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v3.1.3
       with:
         name: excel_name_tool_dist
         path: dist/excel_name_tool/
