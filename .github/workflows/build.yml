@@ -32,17 +32,17 @@ jobs:
 
     - name: Build EXE
       run: |
-        pyinstaller --noconfirm --windowed --onedir "excel_姓名統計工具.py"
+        pyinstaller --noconfirm --windowed --onedir "excel_name_tool.py"
 
-    - name: Zip output folder (unicode-safe)
+    - name: Zip output folder (clean name)
       shell: pwsh
       run: |
-        $source = Join-Path -Path "dist" -ChildPath "excel_姓名統計工具"
-        $destination = "dist/excel_output.zip"
+        $source = Join-Path -Path "dist" -ChildPath "excel_name_tool"
+        $destination = "dist/excel_name_tool.zip"
         Compress-Archive -Path "$source/*" -DestinationPath $destination
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: windows-exe
-        path: dist/excel_output.zip
+        path: dist/excel_name_tool.zip
