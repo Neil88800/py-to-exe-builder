@@ -4,6 +4,8 @@ import pandas as pd
 import os
 import threading
 import time
+from openpyxl import load_workbook
+from openpyxl.styles import Font, Alignment, Border, Side
 
 class ExcelNameCounterApp:
     def __init__(self, root):
@@ -14,6 +16,7 @@ class ExcelNameCounterApp:
         self.root.resizable(False, False)
 
         self.filename = None
+        self.sample_filename = None
         self.save_path = tk.StringVar()
         self.output_filename = tk.StringVar(value="產出報表")
 
@@ -31,6 +34,14 @@ class ExcelNameCounterApp:
                                    fg="#aaaaaa", bg="#0f0f1a")
         self.file_label.pack()
 
+        sample_btn = tk.Button(root, text="📄 載入樣板檔案", command=self.select_sample_file,
+                               **self.button_style(small=True, text_color="#000000"))
+        sample_btn.pack(pady=10)
+
+        self.sample_label = tk.Label(root, text="尚未選擇樣板", font=("Segoe UI", 12),
+                                     fg="#aaaaaa", bg="#0f0f1a")
+        self.sample_label.pack()
+
         path_frame = tk.Frame(root, bg="#0f0f1a")
         path_frame.pack(pady=10)
         tk.Label(path_frame, text="📁 儲存路徑：", font=("Segoe UI", 12),
@@ -42,7 +53,7 @@ class ExcelNameCounterApp:
 
         filename_frame = tk.Frame(root, bg="#0f0f1a")
         filename_frame.pack(pady=5)
-        tk.Label(filename_frame, text="📝 檔名（不需輸入副檔名）：", font=("Segoe UI", 12),
+        tk.Label(filename_frame, text="🗒️ 檔名（不需輸入副檔名）：", font=("Segoe UI", 12),
                  fg="#ffffff", bg="#0f0f1a").pack(side=tk.LEFT, padx=5)
         self.name_entry = tk.Entry(filename_frame, textvariable=self.output_filename, **self.entry_style())
         self.name_entry.pack(side=tk.LEFT)
@@ -98,11 +109,14 @@ class ExcelNameCounterApp:
         }
 
     def select_file(self):
-        self.filename = filedialog.askopenfilename(
-            filetypes=[("Excel files", "*.xlsx *.xls")]
-        )
+        self.filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
         if self.filename:
             self.file_label.config(text=os.path.basename(self.filename))
+
+    def select_sample_file(self):
+        self.sample_filename = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+        if self.sample_filename:
+            self.sample_label.config(text=os.path.basename(self.sample_filename))
 
     def select_save_path(self):
         directory = filedialog.askdirectory()
@@ -110,8 +124,8 @@ class ExcelNameCounterApp:
             self.save_path.set(directory)
 
     def run_process(self):
-        if not self.filename:
-            messagebox.showwarning("⚠️ 錯誤", "請先選擇一個 Excel 檔案。")
+        if not self.filename or not self.sample_filename:
+            messagebox.showwarning("⚠️ 錯誤", "請選擇 Excel 檔案與樣板檔案。")
             return
         if not self.save_path.get():
             messagebox.showwarning("⚠️ 錯誤", "請選擇儲存位置。")
@@ -122,7 +136,6 @@ class ExcelNameCounterApp:
 
         self.progress['value'] = 0
         self.progress_label.config(text="")
-
         threading.Thread(target=self.process_file).start()
 
     def process_file(self):
@@ -130,35 +143,72 @@ class ExcelNameCounterApp:
             start_time = time.time()
             self.update_progress(10, start_time)
 
-            xlsx = pd.ExcelFile(self.filename)
-            if '工作表1' not in xlsx.sheet_names:
-                raise ValueError("檔案中沒有 '工作表1' 工作表。")
-
-            df = xlsx.parse('工作表1')
-            self.update_progress(30, start_time)
-
+            df = pd.read_excel(self.filename, sheet_name='工作表1')
             data = df.iloc[1:, 2].dropna().astype(str)
             names = data.str.extract(r'-(.+)$')[0].str.strip()
             summary = names.value_counts().reset_index()
             summary.columns = ['姓名', '次數']
-            summary.loc[len(summary)] = ['總計', summary['次數'].sum()]
-            self.update_progress(70, start_time)
+            summary_total = summary['次數'].sum()
+            self.update_progress(40, start_time)
+
+            wb = load_workbook(self.sample_filename)
+            ws = wb["工作表1"]
+
+            for row in ws.iter_rows(min_row=3, max_row=999, min_col=2, max_col=3):
+                for cell in row:
+                    cell.value = None
+
+            start_row = 3
+            for i, (name, count) in enumerate(summary.values):
+                ws.cell(row=start_row + i, column=2, value=name)
+                ws.cell(row=start_row + i, column=3, value=count)
+                cell_d = ws.cell(row=start_row + i, column=4, value="是■      否□")
+                cell_d.font = Font(name="標楷體", size=16)
+                cell_d.alignment = Alignment(horizontal='left', vertical='center')
+
+            final_row = start_row + len(summary)
+
+            thin_top = Border(top=Side(style='thin'))
+            for col in range(1, 6):
+                cell = ws.cell(row=final_row, column=col)
+                cell.font = Font(name="標楷體", size=16)
+                cell.alignment = Alignment(horizontal='left', vertical='center')
+                cell.border = thin_top
+
+            ws.cell(row=final_row, column=1).value = "承辦人："
+            ws.cell(row=final_row, column=4).value = "單位主管："
+
+            if final_row + 1 <= ws.max_row:
+                ws.delete_rows(final_row + 1, ws.max_row - final_row)
+
+            for row in ws.iter_rows(min_row=2, max_row=final_row, min_col=1, max_col=4):
+                for cell in row:
+                    cell.font = Font(name="標楷體", size=14)
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+            if "工作表2" in wb.sheetnames:
+                del wb["工作表2"]
+            ws2 = wb.create_sheet("工作表2")
+            ws2["B2"] = "姓名"
+            ws2["C2"] = "次數"
+            for i, (name, count) in enumerate(summary.values, start=3):
+                ws2[f"B{i}"] = name
+                ws2[f"C{i}"] = count
+            ws2[f"B{i+1}"] = "總計"
+            ws2[f"C{i+1}"] = summary_total
+
+            for row in ws2.iter_rows(min_row=2, max_row=i+1, min_col=2, max_col=3):
+                for cell in row:
+                    cell.font = Font(name="標楷體", size=14)
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
 
             filename = self.output_filename.get().strip()
             if not filename.endswith(".xlsx"):
                 filename += ".xlsx"
-
             output_path = os.path.join(self.save_path.get(), filename)
 
-            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                summary.to_excel(writer, sheet_name='工作表2', startrow=2, startcol=1, index=False)
-                ws = writer.sheets['工作表2']
-                ws['B2'] = '姓名'
-                ws['C2'] = '次數'
-
+            wb.save(output_path)
             self.update_progress(100, start_time)
-
-            # 完成後更新進度條為100%
             self.root.after(0, self.show_complete_message, output_path)
         except Exception as e:
             self.root.after(0, self.show_error_message, e)
