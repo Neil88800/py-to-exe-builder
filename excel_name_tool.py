@@ -4,6 +4,8 @@ import pandas as pd
 import os
 import threading
 import time
+import io
+import msoffcrypto
 from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment, Border, Side
 
@@ -143,9 +145,20 @@ class ExcelNameCounterApp:
             start_time = time.time()
             self.update_progress(10, start_time)
 
-            df = pd.read_excel(self.filename, sheet_name='工作表1')
-            data = df.iloc[1:, 2].dropna().astype(str)
-            names = data.str.extract(r'-(.+)$')[0].str.strip()
+            decrypted = io.BytesIO()
+            with open(self.filename, "rb") as f:
+                office_file = msoffcrypto.OfficeFile(f)
+                office_file.load_key(password="2222")
+                office_file.decrypt(decrypted)
+
+            wb_data = load_workbook(filename=decrypted, read_only=True, data_only=True)
+            ws_data = wb_data['QueryLogReport']
+            data = [[cell for cell in row] for row in ws_data.iter_rows(values_only=True)]
+            df = pd.DataFrame(data[1:], columns=data[0])
+
+            raw_data = df.iloc[:, 3].dropna().astype(str)  # 第四欄
+            names = raw_data.str.extract(r'-(.+)$')[0].str.strip()
+            names = names[names.notnull() & (names != '')]
             summary = names.value_counts().reset_index()
             summary.columns = ['姓名', '次數']
             summary_total = summary['次數'].sum()
@@ -156,7 +169,8 @@ class ExcelNameCounterApp:
 
             for row in ws.iter_rows(min_row=3, max_row=999, min_col=2, max_col=3):
                 for cell in row:
-                    cell.value = None
+                    if hasattr(cell, 'value'):
+                        cell.value = None
 
             start_row = 3
             for i, (name, count) in enumerate(summary.values):
