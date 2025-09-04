@@ -1,4 +1,1 @@
-pandas
-openpyxl
-msoffcrypto-tool
-pyinstaller
+pillow
