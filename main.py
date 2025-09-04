@@ -7,7 +7,6 @@ TARGET_SIZE_KB = 200
 
 def compress_image(file_path):
     img = Image.open(file_path)
-    # PNG、RGBA 轉為 JPEG RGB
     if img.mode in ("RGBA", "LA"):
         background = Image.new("RGB", img.size, (255, 255, 255))
         background.paste(img, mask=img.split()[-1])
@@ -17,13 +16,11 @@ def compress_image(file_path):
 
     output_path = os.path.splitext(os.path.basename(file_path))[0] + "_compressed.jpg"
     quality = 95
-
     while quality > 10:
         img.save(output_path, "JPEG", quality=quality, optimize=True)
         if os.path.getsize(output_path) <= TARGET_SIZE_KB * 1024:
             return output_path
         quality -= 5
-
     return output_path
 
 def choose_files():
@@ -36,7 +33,7 @@ def choose_files():
         for i, f in enumerate(file_paths, start=1):
             compressed_file = compress_image(f)
             zipf.write(compressed_file)
-            os.remove(compressed_file)  # 壓縮完成後刪掉單張壓縮檔
+            os.remove(compressed_file)
             print(f"[{i}/{len(file_paths)}] 已壓縮: {compressed_file}")
 
     messagebox.showinfo("完成", f"已壓縮 {len(file_paths)} 張圖片並打包成\n{zip_filename}")
