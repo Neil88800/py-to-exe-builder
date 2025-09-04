@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image
-import os
+import os, zipfile
 
 TARGET_SIZE_KB = 200
 
@@ -15,7 +15,7 @@ def compress_image(file_path):
     else:
         img = img.convert("RGB")
 
-    output_path = os.path.splitext(file_path)[0] + "_compressed.jpg"
+    output_path = os.path.splitext(os.path.basename(file_path))[0] + "_compressed.jpg"
     quality = 95
 
     while quality > 10:
@@ -26,17 +26,26 @@ def compress_image(file_path):
 
     return output_path
 
-def choose_file():
-    file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.webp")])
-    if file_path:
-        output = compress_image(file_path)
-        messagebox.showinfo("完成", f"壓縮完成，輸出檔案：\n{output}")
+def choose_files():
+    file_paths = filedialog.askopenfilenames(filetypes=[("Image files", "*.jpg;*.jpeg;*.png;*.webp")])
+    if not file_paths:
+        return
+
+    zip_filename = "compressed_images.zip"
+    with zipfile.ZipFile(zip_filename, "w") as zipf:
+        for i, f in enumerate(file_paths, start=1):
+            compressed_file = compress_image(f)
+            zipf.write(compressed_file)
+            os.remove(compressed_file)  # 壓縮完成後刪掉單張壓縮檔
+            print(f"[{i}/{len(file_paths)}] 已壓縮: {compressed_file}")
+
+    messagebox.showinfo("完成", f"已壓縮 {len(file_paths)} 張圖片並打包成\n{zip_filename}")
 
 root = tk.Tk()
-root.title("圖片壓縮工具")
-root.geometry("300x150")
+root.title("圖片批次壓縮工具")
+root.geometry("350x150")
 
-btn = tk.Button(root, text="選擇圖片並壓縮", command=choose_file)
+btn = tk.Button(root, text="選擇圖片並批次壓縮", command=choose_files)
 btn.pack(expand=True)
 
 root.mainloop()
